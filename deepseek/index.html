@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>かんたん将棋 - カジュアル対局</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body {
+            background: linear-gradient(145deg, #f7f0e6 0%, #e8dfd3 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', 'Helvetica Neue', system-ui, sans-serif;
+            padding: 12px;
+        }
+        .game-wrapper {
+            max-width: 700px;
+            width: 100%;
+            background: rgba(255, 247, 235, 0.7);
+            backdrop-filter: blur(4px);
+            border-radius: 56px 56px 40px 40px;
+            padding: 24px 18px 30px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(255, 235, 210, 0.6);
+        }
+        h1 {
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.9rem;
+            letter-spacing: 2px;
+            color: #4d3e32;
+            margin-top: -6px;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 4px rgba(255, 215, 175, 0.3);
+        }
+        h1 small {
+            font-size: 0.9rem;
+            font-weight: 400;
+            background: #b7a38b;
+            color: #fcf3e8;
+            padding: 0 14px;
+            border-radius: 40px;
+            margin-left: 10px;
+            display: inline-block;
+            line-height: 1.6;
+        }
+        .status-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            background: #dacfc1;
+            padding: 8px 18px;
+            border-radius: 60px;
+            margin-bottom: 16px;
+            box-shadow: inset 0 2px 6px rgba(90, 70, 50, 0.15);
+        }
+        .turn-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #2d241c;
+        }
+        .turn-badge {
+            background: #f5e7d9;
+            padding: 2px 18px;
+            border-radius: 40px;
+            font-size: 1rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            color: #3e3228;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            border: none;
+            background: #f2e3d4;
+            padding: 6px 16px;
+            border-radius: 40px;
+            font-weight: 500;
+            color: #3f3226;
+            box-shadow: 0 3px 0 #b7a088, 0 4px 8px rgba(0,0,0,0.05);
+            transition: 0.08s linear;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid #e7d5c2;
+        }
+        .btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #b7a088;
+        }
+        .btn-primary {
+            background: #d6bca4;
+            color: #2d1f15;
+            border-color: #c4aa90;
+        }
+        .board-container {
+            background: #dac09a;
+            border-radius: 28px;
+            padding: 14px;
+            box-shadow: inset 0 -6px 0 #af8f6e, 0 12px 28px rgba(60, 40, 20, 0.25);
+            margin-bottom: 10px;
+        }
+        #shogi-board {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            aspect-ratio: 1 / 1;
+            background: #e8d6b0;
+            border-radius: 16px;
+            gap: 2px;
+            padding: 4px;
+            box-shadow: inset 0 0 0 2px #b2926e;
+        }
+        .cell {
+            background: #f2e1c0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(1.4rem, 5.5vw, 2.4rem);
+            font-weight: 600;
+            color: #1a130e;
+            aspect-ratio: 1 / 1;
+            transition: 0.08s ease;
+            box-shadow: inset 0 -2px 0 #b69a78, 0 2px 4px rgba(0,0,0,0.03);
+            cursor: pointer;
+            text-shadow: 0 1px 2px rgba(255, 215, 150, 0.3);
+            position: relative;
+        }
+        .cell.sente {
+            color: #1f2c3c;
+        }
+        .cell.gote {
+            color: #3c1f1a;
+        }
+        .cell.highlight {
+            background: #b8d9b0;
+            box-shadow: inset 0 0 0 3px #4f8a3e, 0 0 12px #98c08a;
+            transform: scale(0.96);
+        }
+        .cell.selected {
+            background: #eac78c;
+            box-shadow: inset 0 0 0 3px #c99e4a, 0 0 16px #eac078;
+            transform: scale(0.95);
+        }
+        .cell .promote-badge {
+            position: absolute;
+            bottom: 1px;
+            right: 3px;
+            font-size: 0.5rem;
+            background: #c9a77b;
+            color: #1e160f;
+            padding: 0 5px;
+            border-radius: 12px;
+            font-weight: 700;
+            opacity: 0.7;
+            line-height: 1.2;
+        }
+        .captured-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 10px;
+            background: #dacfc1;
+            border-radius: 40px;
+            padding: 10px 18px;
+            margin: 10px 0 8px;
+            min-height: 48px;
+            align-items: center;
+            box-shadow: inset 0 2px 6px rgba(80, 60, 40, 0.12);
+        }
+        .captured-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #4d3d2d;
+            margin-right: 4px;
+        }
+        .captured-piece {
+            background: #ede0d0;
+            padding: 2px 12px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #cdb79b;
+            cursor: pointer;
+            transition: 0.06s linear;
+        }
+        .captured-piece:active {
+            transform: scale(0.9);
+        }
+        .captured-piece.sente {
+            color: #1f2c3c;
+        }
+        .captured-piece.gote {
+            color: #3c1f1a;
+        }
+        .info-message {
+            text-align: center;
+            font-weight: 500;
+            background: #ebe1d3;
+            border-radius: 60px;
+            padding: 6px 12px;
+            font-size: 0.95rem;
+            color: #2f241b;
+            margin: 8px 0 0;
+            border: 1px solid #d5c2ad;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+        @media (max-width: 480px) {
+            .game-wrapper { padding: 14px 10px; }
+            .status-bar { flex-direction: column; align-items: stretch; gap: 6px; }
+            .btn-group { justify-content: center; }
+            .turn-indicator { justify-content: center; }
+            .captured-area { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-wrapper">
+    <h1>🖤 将棋 <small>カジュアル</small></h1>
+
+    <div class="status-bar">
+        <div class="turn-indicator">
+            <span>⏳</span>
+            <span id="turnDisplay" class="turn-badge">先手</span>
+        </div>
+        <div class="btn-group">
+            <button class="btn" id="resetBtn">🔄 新局</button>
+            <button class="btn btn-primary" id="undoBtn">⏪ 待った</button>
+        </div>
+    </div>
+
+    <div class="board-container">
+        <div id="shogi-board"></div>
+    </div>
+
+    <div class="captured-area" id="capturedSente">
+        <span class="captured-label">📦 先手持ち</span>
+    </div>
+    <div class="captured-area" id="capturedGote">
+        <span class="captured-label">📦 後手持ち</span>
+    </div>
+
+    <div id="infoMessage" class="info-message">👋 駒をクリックして移動</div>
+</div>
+<script>
+    (function() {
+        // ---- 将棋データ ----
+        const PIECES = {
+            '歩': { id: 'FU', promote: 'と', value: 1 },
+            '香': { id: 'KY', promote: '杏', value: 2 },
+            '桂': { id: 'KE', promote: '圭', value: 3 },
+            '銀': { id: 'GI', promote: '全', value: 4 },
+            '金': { id: 'KI', promote: null, value: 5 },
+            '角': { id: 'KA', promote: '馬', value: 6 },
+            '飛': { id: 'HI', promote: '龍', value: 7 },
+            '王': { id: 'OU', promote: null, value: 8 },
+            '玉': { id: 'GY', promote: null, value: 8 },
+            'と': { id: 'TO', promote: null, value: 1 },
+            '杏': { id: 'NY', promote: null, value: 2 },
+            '圭': { id: 'NK', promote: null, value: 3 },
+            '全': { id: 'NG', promote: null, value: 4 },
+            '馬': { id: 'UM', promote: null, value: 6 },
+            '龍': { id: 'RY', promote: null, value: 7 },
+        };
+        // 駒の表示名と成り先
+        const PROMOTE_MAP = {
+            '歩': 'と', '香': '杏', '桂': '圭', '銀': '全', '角': '馬', '飛': '龍'
+        };
+
+        // ---- ゲーム状態 ----
+        let board = [];          // 9x9, 各セル { piece, player } or null
+        let turn = 'sente';      // 'sente' or 'gote'
+        let selectedPos = null;  // { row, col } or null
+        let legalMoves = [];     // [{ row, col }, ...]
+        let moveHistory = [];    // 簡易 undo:  { from, to, captured, promote }
+        let capturedSente = [];  // 先手の持ち駒 (後手から取った駒)
+        let capturedGote = [];   // 後手の持ち駒 (先手から取った駒)
+        let gameOver = false;
+        let inPromotionChoice = false; // 成り選択中フラグ
+
+        // DOM refs
+        const boardEl = document.getElementById('shogi-board');
+        const turnDisplay = document.getElementById('turnDisplay');
+        const infoMsg = document.getElementById('infoMessage');
+        const capturedSenteEl = document.getElementById('capturedSente');
+        const capturedGoteEl = document.getElementById('capturedGote');
+
+        // ---- 初期配置 ----
+        function initBoard() {
+            const raw = [
+                ['香','桂','銀','金','王','金','銀','桂','香'],
+                [' ', '飛', ' ', ' ', ' ', ' ', ' ', '角', ' '],
+                ['歩','歩','歩','歩','歩','歩','歩','歩','歩'],
+                [null,null,null,null,null,null,null,null,null],
+                [null,null,null,null,null,null,null,null,null],
+                [null,null,null,null,null,null,null,null,null],
+                ['歩','歩','歩','歩','歩','歩','歩','歩','歩'],
+                [' ', '角', ' ', ' ', ' ', ' ', ' ', '飛', ' '],
+                ['香','桂','銀','金','玉','金','銀','桂','香']
+            ];
+            const b = [];
+            for (let r=0; r<9; r++) {
+                const row = [];
+                for (let c=0; c<9; c++) {
+                    const v = raw[r][c];
+                    if (v === null || v === ' ') {
+                        row.push(null);
+                    } else {
+                        const player = (r < 3) ? 'gote' : 'sente'; // 上段が後手
+                        row.push({ piece: v, player });
+                    }
+                }
+                b.push(row);
+            }
+            return b;
+        }
+
+        function resetGame() {
+            board = initBoard();
+            turn = 'sente';
+            selectedPos = null;
+            legalMoves = [];
+            moveHistory = [];
+            capturedSente = [];
+            capturedGote = [];
+            gameOver = false;
+            inPromotionChoice = false;
+            render();
+            infoMsg.innerText = '👋 新しい対局を開始';
+        }
+
+        // ---- 駒の移動可能マス (簡易版) ----
+        function inBounds(r,c) { return r>=0 && r<9 && c>=0 && c<9; }
+
+        function getMoves(row, col, boardState) {
+            const cell = boardState[row][col];
+            if (!cell) return [];
+            const { piece, player } = cell;
+            const enemy = (player === 'sente') ? 'gote' : 'sente';
+            const moves = [];
+            const addMove = (r,c) => {
+                if (!inBounds(r,c)) return false;
+                const target = boardState[r][c];
+                if (target && target.player === player) return false; // 自駒
+                moves.push({ row: r, col: c });
+                if (target && target.player === enemy) return false; // 敵駒で停止
+                return true;
+            };
+            const addDir = (dr, dc, steps=8) => {
+                let r = row+dr, c = col+dc;
+                for (let i=0; i<steps; i++) {
+                    if (!addMove(r,c)) break;
+                    r += dr; c += dc;
+                }
+            };
+
+            const p = piece;
+            // 歩・と金
+            if (p === '歩') {
+                const dr = (player === 'sente') ? -1 : 1;
+                addMove(row+dr, col);
+            } else if (p === 'と') {
+                const dr = (player === 'sente') ? -1 : 1;
+                addMove(row+dr, col-1); addMove(row+dr, col); addMove(row+dr, col+1);
+                addMove(row, col-1); addMove(row, col+1);
+                addMove(row-dr, col);
+            } else if (p === '香') {
+                const dr = (player === 'sente') ? -1 : 1;
+                addDir(dr, 0, 8);
+            } else if (p === '杏') {
+                const dr = (player === 'sente') ? -1 : 1;
+                addMove(row+dr, col-1); addMove(row+dr, col); addMove(row+dr, col+1);
+                addMove(row, col-1); addMove(row, col+1);
+                addMove(row-dr, col);
+            } else if (p === '桂') {
+                const dr = (player === 'sente') ? -2 : 2;
+                addMove(row+dr, col-1); addMove(row+dr, col+1);
+            } else if (p === '圭') {
+                const dr = (player === 'sente') ? -1 : 1;
+                addMove(row+dr, col-1); addMove(row+dr, col); addMove(row+dr, col+1);
+                addMove(row, col-1); addMove(row, col+1);
+                addMove(row-dr, col);
+            } else if (p === '銀') {
+                const dr = (player === 'sente') ? -1 : 1;
+                addMove(row+dr, col-1); addMove(row+dr, col); addMove(row+dr, col+1);
+                addMove(row, col-1); addMove(row, col+1);
+            } else if (p === '全') {
+                const dr = (player === 'sente') ? -1 : 1;
+                addMove(row+dr, col-1); addMove(row+dr, col); addMove(row+dr, col+1);
+                addMove(row, col-1); addMove(row, col+1);
+                addMove(row-dr, col);
+            } else if (p === '金' || p === '玉' || p === '王' || p === '龍' || p === '馬') {
+                const dr = (player === 'sente') ? -1 : 1;
+                if (p === '金' || p === '玉' || p === '王') {
+                    addMove(row+dr, col-1); addMove(row+dr, col); addMove(row+dr, col+1);
+                    addMove(row, col-1); addMove(row, col+1);
+                    addMove(row-dr, col);
+                } else if (p === '龍') {
+                    addDir(-1,0,8); addDir(1,0,8); addDir(0,-1,8); addDir(0,1,8);
+                    addMove(row-1,col-1); addMove(row-1,col+1); addMove(row+1,col-1); addMove(row+1,col+1);
+                } else if (p === '馬') {
+                    addDir(-1,-1,8); addDir(-1,1,8); addDir(1,-1,8); addDir(1,1,8);
+                    addMove(row-1,col); addMove(row+1,col); addMove(row,col-1); addMove(row,col+1);
+                }
+            } else if (p === '角') {
+                addDir(-1,-1,8); addDir(-1,1,8); addDir(1,-1,8); addDir(1,1,8);
+            } else if (p === '飛') {
+                addDir(-1,0,8); addDir(1,0,8); addDir(0,-1,8); addDir(0,1,8);
+            }
+            return moves;
+        }
+
+        // 王手・詰み (簡易: 王/玉が取られるかどうか)
+        function isKingInCheck(player, boardState) {
+            const king = (player === 'sente') ? '王' : '玉';
+            let kingPos = null;
+            for (let r=0; r<9; r++) for (let c=0; c<9; c++) {
+                const cell = boardState[r][c];
+                if (cell && cell.piece === king && cell.player === player) kingPos = { row: r, col: c };
+            }
+            if (!kingPos) return true;
+            const enemy = (player === 'sente') ? 'gote' : 'sente';
+            for (let r=0; r<9; r++) for (let c=0; c<9; c++) {
+                const cell = boardState[r][c];
+                if (cell && cell.player === enemy) {
+                    const moves = getMoves(r, c, boardState);
+                    for (const m of moves) {
+                        if (m.row === kingPos.row && m.col === kingPos.col) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function isCheckmate(player, boardState) {
+            // 全自駒の合法手を生成して、王手回避できるか
+            for (let r=0; r<9; r++) for (let c=0; c<9; c++) {
+                const cell = boardState[r][c];
+                if (cell && cell.player === player) {
+                    const moves = getMoves(r, c, boardState);
+                    for (const m of moves) {
+                        const sim = simulateMove(boardState, r, c, m.row, m.col);
+                        if (!isKingInCheck(player, sim)) return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function simulateMove(boardState, fromR, fromC, toR, toC) {
+            const copy = boardState.map(row => row.map(c => c ? { ...c } : null));
+            const moving = copy[fromR][fromC];
+            copy[toR][toC] = moving;
+            copy[fromR][fromC] = null;
+            return copy;
+        }
+
+        // ---- 成り判定 ----
+        function canPromote(piece, player, toRow) {
+            if (!PIECES[piece] || !PIECES[piece].promote) return false;
+            if (piece === 'と' || piece === '杏' || piece === '圭' || piece === '全' || piece === '馬' || piece === '龍') return false;
+            const promoZone = (player === 'sente') ? [0,1,2] : [6,7,8];
+            return promoZone.includes(toRow);
+        }
+
+        // ---- 移動実行 ----
+        function executeMove(fromR, fromC, toR, toC, promote=false) {
+            const cell = board[fromR][fromC];
+            if (!cell) return false;
+            const { piece, player } = cell;
+            const captured = board[toR][toC];
+            // 履歴保存
+            moveHistory.push({ from: { row: fromR, col: fromC }, to: { row: toR, col: toC }, captured, promote });
+
+            // 駒を取る
+            if (captured) {
+                const capPiece = captured.piece;
+                if (captured.player === 'sente') capturedGote.push(capPiece);
+                else capturedSente.push(capPiece);
+            }
+
+            // 移動
+            let movedPiece = piece;
+            if (promote && PIECES[piece] && PIECES[piece].promote) {
+                movedPiece = PIECES[piece].promote;
+            }
+            board[toR][toC] = { piece: movedPiece, player };
+            board[fromR][fromC] = null;
+
+            // 成り選択解除
+            inPromotionChoice = false;
+            selectedPos = null;
+            legalMoves = [];
+
+            // 手番交代
+            const enemy = (player === 'sente') ? 'gote' : 'sente';
+            turn = enemy;
+
+            // 王手・詰みチェック
+            if (isKingInCheck(enemy, board)) {
+                if (isCheckmate(enemy, board)) {
+                    gameOver = true;
+                    infoMsg.innerText = `🏆 ${player==='sente'?'先手':'後手'}の勝ち！ 詰みです`;
+                } else {
+                    infoMsg.innerText = `⚡ ${enemy==='sente'?'先手':'後手'}に王手！`;
+                }
+            } else {
+                infoMsg.innerText = `👣 ${turn==='sente'?'先手':'後手'}の手番`;
+            }
+            render();
+            if (!gameOver && turn === 'gote') {
+                setTimeout(() => cpuMove(), 300);
+            }
+            return true;
+        }
+
+        // ---- CPU (簡易) ----
+        function cpuMove() {
+            if (gameOver || turn !== 'gote') return;
+            // ランダム性＋取れる駒優先
+            const moves = [];
+            for (let r=0; r<9; r++) for (let c=0; c<9; c++) {
+                const cell = board[r][c];
+                if (cell && cell.player === 'gote') {
+                    const m = getMoves(r, c, board);
+                    for (const mv of m) {
+                        const target = board[mv.row][mv.col];
+                        moves.push({ fromR: r, fromC: c, toR: mv.row, toC: mv.col, capture: !!target });
+                    }
+                }
+            }
+            if (moves.length === 0) { gameOver = true; infoMsg.innerText = '⏳ 後手 指す手がありません'; render(); return; }
+            // 優先: 取れる手
+            const captures = moves.filter(m => m.capture);
+            let chosen = captures.length > 0 ? captures : moves;
+            // ランダム
+            const idx = Math.floor(Math.random() * chosen.length);
+            const move = chosen[idx];
+            // 成り判定（簡易: 成れる場合は50%で成る）
+            const cell = board[move.fromR][move.fromC];
+            let promote = false;
+            if (cell && canPromote(cell.piece, 'gote', move.toR)) {
+                promote = Math.random() < 0.5;
+            }
+            executeMove(move.fromR, move.fromC, move.toR, move.toC, promote);
+        }
+
+        // ---- レンダリング ----
+        function render() {
+            boardEl.innerHTML = '';
+            for (let r=0; r<9; r++) {
+                for (let c=0; c<9; c++) {
+                    const cell = board[r][c];
+                    const div = document.createElement('div');
+                    div.className = 'cell';
+                    if (cell) {
+                        div.classList.add(cell.player);
+                        div.innerText = cell.piece;
+                        // 成り駒表示
+                        if (['と','杏','圭','全','馬','龍'].includes(cell.piece)) {
+                            const badge = document.createElement('span');
+                            badge.className = 'promote-badge';
+                            badge.innerText = '成';
+                            div.appendChild(badge);
+                        }
+                    }
+                    // ハイライト
+                    const isSelected = (selectedPos && selectedPos.row === r && selectedPos.col === c);
+                    if (isSelected) div.classList.add('selected');
+                    const isLegal = legalMoves.some(m => m.row === r && m.col === c);
+                    if (isLegal) div.classList.add('highlight');
+
+                    div.dataset.row = r;
+                    div.dataset.col = c;
+                    div.addEventListener('click', (e) => onCellClick(r, c));
+                    boardEl.appendChild(div);
+                }
+            }
+            // 持ち駒表示
+            capturedSenteEl.innerHTML = '<span class="captured-label">📦 先手持ち</span> ' + 
+                capturedSente.map(p => `<span class="captured-piece sente" data-piece="${p}">${p}</span>`).join('');
+            capturedGoteEl.innerHTML = '<span class="captured-label">📦 後手持ち</span> ' + 
+                capturedGote.map(p => `<span class="captured-piece gote" data-piece="${p}">${p}</span>`).join('');
+
+            // 持ち駒クリックで打つ (簡易)
+            document.querySelectorAll('.captured-piece.sente').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    if (gameOver || turn !== 'sente' || inPromotionChoice) return;
+                    const piece = el.dataset.piece;
+                    // 打ちたい: 空きマスをハイライト
+                    const empty = [];
+                    for (let r=0; r<9; r++) for (let c=0; c<9; c++) {
+                        if (!board[r][c]) empty.push({ row: r, col: c });
+                    }
+                    if (empty.length === 0) return;
+                    // 簡易: 最初の空きに打つ
+                    const pos = empty[Math.floor(Math.random() * empty.length)];
+                    // 持ち駒から削除
+                    const idx = capturedSente.indexOf(piece);
+                    if (idx > -1) capturedSente.splice(idx, 1);
+                    board[pos.row][pos.col] = { piece, player: 'sente' };
+                    // 履歴
+                    moveHistory.push({ from: null, to: { row: pos.row, col: pos.col }, captured: null, promote: false });
+                    turn = 'gote';
+                    selectedPos = null; legalMoves = [];
+                    render();
+                    infoMsg.innerText = `🖐 後手の手番`;
+                    if (!gameOver && turn === 'gote') setTimeout(() => cpuMove(), 300);
+                });
+            });
+            document.querySelectorAll('.captured-piece.gote').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    if (gameOver || turn !== 'gote' || inPromotionChoice) return;
+                    const piece = el.dataset.piece;
+                    const empty = [];
+                    for (let r=0; r<9; r++) for (let c=0; c<9; c++) {
+                        if (!board[r][c]) empty.push({ row: r, col: c });
+                    }
+                    if (empty.length === 0) return;
+                    const pos = empty[Math.floor(Math.random() * empty.length)];
+                    const idx = capturedGote.indexOf(piece);
+                    if (idx > -1) capturedGote.splice(idx, 1);
+                    board[pos.row][pos.col] = { piece, player: 'gote' };
+                    moveHistory.push({ from: null, to: { row: pos.row, col: pos.col }, captured: null, promote: false });
+                    turn = 'sente';
+                    selectedPos = null; legalMoves = [];
+                    render();
+                    infoMsg.innerText = `🖐 先手の手番`;
+                    if (!gameOver && turn === 'sente') { /* 待機 */ }
+                });
+            });
+
+            turnDisplay.innerText = (turn === 'sente') ? '先手' : '後手';
+            if (gameOver) turnDisplay.innerText += ' (終局)';
+        }
+
+        // ---- クリック処理 ----
+        function onCellClick(row, col) {
+            if (gameOver || inPromotionChoice) return;
+            const cell = board[row][col];
+
+            // 移動先選択 (ハイライトクリック)
+            if (legalMoves.some(m => m.row === row && m.col === col)) {
+                // 成り選択が必要か
+                const fromCell = board[selectedPos.row][selectedPos.col];
+                const canProm = canPromote(fromCell.piece, fromCell.player, row);
+                if (canProm) {
+                    // 成り選択ダイアログ
+                    inPromotionChoice = true;
+                    infoMsg.innerText = `♟ 成りますか？ [成る] または [成らない] を選択`;
+                    // 簡易ダイアログ： 成る/成らない ボタンを表示
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'fixed';
+                    overlay.style.top = '0'; overlay.style.left = '0'; overlay.style.width = '100%'; overlay.style.height = '100%';
+                    overlay.style.background = 'rgba(0,0,0,0.25)';
+                    overlay.style.backdropFilter = 'blur(2px)';
+                    overlay.style.display = 'flex'; overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center';
+                    overlay.style.zIndex = '999';
+                    const dialog = document.createElement('div');
+                    dialog.style.background = '#f7ede1'; dialog.style.padding = '30px 40px'; dialog.style.borderRadius = '60px';
+                    dialog.style.boxShadow = '0 12px 30px rgba(0,0,0,0.3)';
+                    dialog.style.textAlign = 'center';
+                    dialog.innerHTML = `<div style="font-size:1.8rem; margin-bottom:16px;">♟ 成りますか？</div>
+                        <div style="display:flex; gap:20px; justify-content:center;">
+                            <button class="btn" id="promoteYes" style="font-size:1.4rem; padding:10px 28px;">✅ 成る</button>
+                            <button class="btn" id="promoteNo" style="font-size:1.4rem; padding:10px 28px;">❌ 成らない</button>
+                        </div>`;
+                    overlay.appendChild(dialog);
+                    document.body.appendChild(overlay);
+
+                    document.getElementById('promoteYes').addEventListener('click', () => {
+                        overlay.remove();
+                        executeMove(selectedPos.row, selectedPos.col, row, col, true);
+                    });
+                    document.getElementById('promoteNo').addEventListener('click', () => {
+                        overlay.remove();
+                        executeMove(selectedPos.row, selectedPos.col, row, col, false);
+                    });
+                    return;
+                }
+                executeMove(selectedPos.row, selectedPos.col, row, col, false);
+                return;
+            }
+
+            // 自駒選択
+            if (cell && cell.player === turn) {
+                selectedPos = { row, col };
+                legalMoves = getMoves(row, col, board);
+                // 王手回避チェック（自殺手を除く）
+                legalMoves = legalMoves.filter(m => {
+                    const sim = simulateMove(board, row, col, m.row, m.col);
+                    return !isKingInCheck(turn, sim);
+                });
+                render();
+                infoMsg.innerText = `👆 ${cell.piece} を選択 (移動先をクリック)`;
+                return;
+            }
+            // それ以外: 選択解除
+            selectedPos = null;
+            legalMoves = [];
+            render();
+            infoMsg.innerText = `👋 駒を選択してください`;
+        }
+
+        // ---- 待った ----
+        function undoMove() {
+            if (gameOver) return;
+            if (moveHistory.length === 0) { infoMsg.innerText = '⛔ 戻す手がありません'; return; }
+            // 最後の手を戻す (CPUの手も含む)
+            const last = moveHistory.pop();
+            // 持ち駒の復元
+            if (last.captured) {
+                const cap = last.captured;
+                if (cap.player === 'sente') {
+                    const idx = capturedGote.indexOf(cap.piece);
+                    if (idx > -1) capturedGote.splice(idx, 1);
+                } else {
+                    const idx = capturedSente.indexOf(cap.piece);
+                    if (idx > -1) capturedSente.splice(idx, 1);
+                }
+            }
+            // 駒を戻す
+            if (last.from) {
+                board[last.from.row][last.from.col] = board[last.to.row][last.to.col];
+                board[last.to.row][last.to.col] = last.captured || null;
+                // 成り戻し
+                if (last.promote) {
+                    const piece = board[last.from.row][last.from.col].piece;
+                    for (const [key, val] of Object.entries(PROMOTE_MAP)) {
+                        if (val === piece) board[last.from.row][last.from.col].piece = key;
+                    }
+                }
+            } else {
+                // 持ち駒から打った場合
+                const piece = board[last.to.row][last.to.col].piece;
+                board[last.to.row][last.to.col] = null;
+                if (turn === 'sente') capturedGote.push(piece);
+                else capturedSente.push(piece);
+            }
+            turn = (turn === 'sente') ? 'gote' : 'sente';
+            selectedPos = null; legalMoves = [];
+            gameOver = false;
+            render();
+            infoMsg.innerText = `⏪ 一手戻しました (${turn==='sente'?'先手':'後手'}の番)`;
+        }
+
+        // ---- イベント ----
+        document.getElementById('resetBtn').addEventListener('click', resetGame);
+        document.getElementById('undoBtn').addEventListener('click', undoMove);
+
+        // ---- 起動 ----
+        resetGame();
+    })();
+</script>
+</body>
+</html>

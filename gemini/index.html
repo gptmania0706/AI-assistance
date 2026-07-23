@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ぽかぽか将棋ランド</title>
+    <style>
+        :root {
+            --bg-color: #f7f9fa;
+            --board-color: #fbd695;
+            --board-line: #b08d57;
+            --player-color: #4a90e2;
+            --cpu-color: #ff6b6b;
+            --highlight-color: rgba(74, 144, 226, 0.4);
+            --text-dark: #333;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-dark);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            user-select: none;
+        }
+
+        h1 {
+            margin: 10px 0;
+            color: #5c6bc0;
+            font-size: 24px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            box-sizing: border-box;
+            font-weight: bold;
+        }
+
+        .turn-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .turn-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+
+        .turn-dot.active-player { background-color: var(--player-color); animation: pulse 1s infinite alternate; }
+        .turn-dot.active-cpu { background-color: var(--cpu-color); animation: pulse 1s infinite alternate; }
+
+        @keyframes pulse {
+            from { transform: scale(0.9); opacity: 0.6; }
+            to { transform: scale(1.1); opacity: 1; }
+        }
+
+        /* 持ち駒エリア */
+        .hand-area {
+            display: flex;
+            gap: 5px;
+            width: 100%;
+            min-height: 50px;
+            background: #edf2f7;
+            border-radius: 15px;
+            padding: 8px;
+            box-sizing: border-box;
+            align-items: center;
+            flex-wrap: wrap;
+            border: 2px dashed #cbd5e0;
+        }
+        .hand-title {
+            font-size: 12px;
+            color: #718096;
+            width: 100%;
+            margin-bottom: 2px;
+            font-weight: bold;
+        }
+
+        /* 将棋盤 */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: var(--board-color);
+            border: 4px solid var(--board-line);
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1), inset 0 0 20px rgba(0,0,0,0.05);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .cell {
+            border: 0.5px solid var(--board-line);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        .cell.highlight::after {
+            content: '';
+            position: absolute;
+            width: 40%;
+            height: 40%;
+            background-color: var(--highlight-color);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .cell.highlight-enemy::after {
+            content: '';
+            position: absolute;
+            width: 80%;
+            height: 80%;
+            border: 3px solid rgba(255, 107, 107, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* 駒のデザイン */
+        .piece {
+            width: 85%;
+            height: 85%;
+            background: #fffdfa;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.12);
+            transition: transform 0.1s, background-color 0.2s;
+            position: relative;
+            color: #2d3748;
+        }
+        
+        @media(max-width: 400px) {
+            .piece { font-size: 14px; }
+        }
+
+        .piece.player { border-bottom: 4px solid var(--player-color); }
+        .piece.cpu { border-top: 4px solid var(--cpu-color); transform: rotate(180deg); }
+        .piece.promoted { color: #e53e3e; }
+        .piece.selected { background-color: #ebf8ff; border-color: var(--player-color); transform: scale(1.05); }
+        .piece.cpu.selected { transform: rotate(180deg) scale(1.05); border-color: var(--cpu-color); }
+
+        .hand-piece {
+            width: 38px;
+            height: 38px;
+            background: #fffdfa;
+            border: 2px solid #cbd5e0;
+            border-radius: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            position: relative;
+        }
+        .hand-piece.player { border-bottom: 3px solid var(--player-color); }
+        .hand-piece.cpu { border-top: 3px solid var(--cpu-color); transform: rotate(180deg); }
+        .hand-piece.selected { background-color: #ebf8ff; border-color: var(--player-color); }
+        .hand-count {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: #4a5568;
+            color: white;
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 10px;
+        }
+
+        /* コントロールボタン */
+        .controls {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 15px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+        }
+
+        .btn-undo { background-color: #edf2f7; color: #4a5568; }
+        .btn-undo:hover { background-color: #e2e8f0; }
+        .btn-reset { background-color: #feebc8; color: #dd6b20; }
+        .btn-reset:hover { background-color: #fbd38d; }
+
+        /* ダイアログ */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            max-width: 300px;
+            width: 80%;
+        }
+        .modal-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-promote { background: #68d391; color: white; }
+        .btn-no-promote { background: #cbd5e0; color: #4a5568; }
+    </style>
+</head>
+<body>
+
+    <h1>ぽかぽか将棋ランド</h1>
+
+    <div class="game-container">
+        <div class="hand-area" id="cpu-hand">
+            <div class="hand-title">CPUの持ち駒</div>
+        </div>
+
+        <div class="info-bar">
+            <div class="turn-indicator">
+                <div id="turn-dot" class="turn-dot active-player"></div>
+                <span id="turn-text">あなたの番です</span>
+            </div>
+            <div id="game-status" style="color: #e53e3e;"></div>
+        </div>
+
+        <div class="board" id="board"></div>
+
+        <div class="hand-area" id="player-hand">
+            <div class="hand-title">あなたの持ち駒</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-undo" onclick="undoMove()">待った ↩</button>
+            <button class="btn-reset" onclick="resetGame()">最初から ↺</button>
+        </div>
+    </div>
+
+    <div class="modal" id="promote-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">駒を成りますか？</h3>
+            <div class="modal-btns">
+                <button class="btn-promote" onclick="handlePromoteChoice(true)">成る</button>
+                <button class="btn-no-promote" onclick="handlePromoteChoice(false)">成らない</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 駒の定義
+        const PIECES = {
+            FU: '歩', KYO: '香', KEI: '桂', GIN: '銀', KIN: '金', KAKU: '角', HI: '飛', OU: '玉',
+            TO: 'と', NYO: '成香', NYU: '成桂', NGIN: '成銀', UMA: '馬', RYU: '竜'
+        };
+
+        const PLAYER = 'player';
+        const CPU = 'cpu';
+
+        // 駒の初期配置 (行, 列) 0~8
+        const INITIAL_BOARD = [
+            [{type:'KYO', owner:CPU}, {type:'KEI', owner:CPU}, {type:'GIN', owner:CPU}, {type:'KIN', owner:CPU}, {type:'OU', owner:CPU}, {type:'KIN', owner:CPU}, {type:'GIN', owner:CPU}, {type:'KEI', owner:CPU}, {type:'KYO', owner:CPU}],
+            [null, {type:'HI', owner:CPU}, null, null, null, null, null, {type:'KAKU', owner:CPU}, null],
+            [{type:'FU', owner:CPU}, {type:'FU', owner:CPU}, {type:'FU', owner:CPU}, {type:'FU', owner:CPU}, {type:'FU', owner:CPU}, {type:'FU', owner:CPU}, {type:'FU', owner:CPU}, {type:'FU', owner:CPU}, {type:'FU', owner:CPU}],
+            [null, null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null, null],
+            [{type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}, {type:'FU', owner:PLAYER}],
+            [null, {type:'KAKU', owner:PLAYER}, null, null, null, null, null, {type:'HI', owner:PLAYER}, null],
+            [{type:'KYO', owner:PLAYER}, {type:'KEI', owner:PLAYER}, {type:'GIN', owner:PLAYER}, {type:'KIN', owner:PLAYER}, {type:'OU', owner:PLAYER}, {type:'KIN', owner:PLAYER}, {type:'GIN', owner:PLAYER}, {type:'KEI', owner:PLAYER}, {type:'KYO', owner:PLAYER}]
+        ];
+
+        let board = [];
+        let hands = { [PLAYER]: {}, [CPU]: {} };
+        let currentTurn = PLAYER;
+        let selectedCell = null; // {r, c} or {handOwner, type}
+        let validMoves = [];
+        let history = []; // 待った用
+        let pendingPromotion = null; // 成り判定保持用
+        let isGameOver = false;
+
+        // ゲーム初期化
+        function initGame() {
+            board = JSON.parse(JSON.stringify(INITIAL_BOARD));
+            hands = { [PLAYER]: {}, [CPU]: {} };
+            currentTurn = PLAYER;
+            selectedCell = null;
+            validMoves = [];
+            history = [];
+            isGameOver = false;
+            document.getElementById('game-status').innerText = "";
+            saveHistory();
+            render();
+        }
+
+        // 履歴の保存
+        function saveHistory() {
+            if (history.length > 10) history.shift();
+            history.push({
+                board: JSON.parse(JSON.stringify(board)),
+                hands: JSON.parse(JSON.stringify(hands)),
+                currentTurn: currentTurn
+            });
+        }
+
+        // 待ったボタン
+        function undoMove() {
+            if (isGameOver) isGameOver = false;
+            document.getElementById('game-status').innerText = "";
+            // プレイヤーの1手前（CPUの着手＋プレイヤーの着手で2つ戻す）
+            if (history.length > 2) {
+                history.pop(); // 現在の状態
+                history.pop(); // CPUの状態
+                const prevState = history[history.length - 1];
+                board = JSON.parse(JSON.stringify(prevState.board));
+                hands = JSON.parse(JSON.stringify(prevState.hands));
+                currentTurn = PLAYER;
+                selectedCell = null;
+                validMoves = [];
+                render();
+            } else if (history.length === 2) { // 最初の1手目の場合
+                history.pop();
+                const prevState = history[0];
+                board = JSON.parse(JSON.stringify(prevState.board));
+                hands = JSON.parse(JSON.stringify(prevState.hands));
+                currentTurn = PLAYER;
+                selectedCell = null;
+                validMoves = [];
+                render();
+            }
+        }
+
+        function resetGame() {
+            if(confirm("新しく対局を始めますか？")) initGame();
+        }
+
+        // 描画処理
+        function render() {
+            renderBoard();
+            renderHands();
+            updateTurnIndicator();
+        }
+
+        function updateTurnIndicator() {
+            const dot = document.getElementById('turn-dot');
+            const text = document.getElementById('turn-text');
+            dot.className = "turn-dot " + (currentTurn === PLAYER ? "active-player" : "active-cpu");
+            text.innerText = currentTurn === PLAYER ? "あなたの番です" : "CPU思考中...";
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cellEl = document.createElement('div');
+                    cellEl.className = 'cell';
+                    
+                    // ハイライト判定
+                    const isTarget = validMoves.some(m => m.r === r && m.c === c);
+                    if (isTarget) {
+                        cellEl.classList.add(board[r][c] ? 'highlight-enemy' : 'highlight');
+                    }
+
+                    const piece = board[r][c];
+                    if (piece) {
+                        const pieceEl = document.createElement('div');
+                        pieceEl.className = `piece ${piece.owner}`;
+                        if (['TO','NYO','NYU','NGIN','UMA','RYU'].includes(piece.type)) {
+                            pieceEl.classList.add('promoted');
+                        }
+                        pieceEl.innerText = PIECES[piece.type];
+
+                        // 選択中のエフェクト
+                        if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                            pieceEl.classList.add('selected');
+                        }
+
+                        cellEl.appendChild(pieceEl);
+                    }
+
+                    cellEl.onclick = () => handleCellClick(r, c);
+                    boardEl.appendChild(cellEl);
+                }
+            }
+        }
+
+        function renderHands() {
+            const renderSpecificHand = (owner, elementId) => {
+                const area = document.getElementById(elementId);
+                area.innerHTML = `<div class="hand-title">${owner === PLAYER ? 'あなた' : 'CPU'}の持ち駒</div>`;
+                for (const [type, count] of Object.entries(hands[owner])) {
+                    if (count <= 0) continue;
+                    const hPiece = document.createElement('div');
+                    hPiece.className = `hand-piece ${owner}`;
+                    if (selectedCell && selectedCell.handOwner === owner && selectedCell.type === type) {
+                        hPiece.classList.add('selected');
+                    }
+                    hPiece.innerText = PIECES[type];
+                    if (count > 1) {
+                        const countEl = document.createElement('div');
+                        countEl.className = 'hand-count';
+                        countEl.innerText = count;
+                        hPiece.appendChild(countEl);
+                    }
+                    if (owner === PLAYER && currentTurn === PLAYER && !isGameOver) {
+                        hPiece.onclick = (e) => {
+                            e.stopPropagation();
+                            selectHand(owner, type);
+                        };
+                    }
+                    area.appendChild(hPiece);
+                }
+            };
+            renderSpecificHand(PLAYER, 'player-hand');
+            renderSpecificHand(CPU, 'cpu-hand');
+        }
+
+        // マスクリック時の制御
+        function handleCellClick(r, c) {
+            if (currentTurn !== PLAYER || isGameOver) return;
+
+            const targetPiece = board[r][c];
+            const isMoveValid = validMoves.some(m => m.r === r && m.c === c);
+
+            if (isMoveValid) {
+                // 駒の移動または打つ処理を実行
+                executeMoveOrDrop(r, c);
+            } else {
+                // 自分の駒を選択
+                if (targetPiece && targetPiece.owner === PLAYER) {
+                    selectedCell = { r, c };
+                    validMoves = getValidMoves(r, c, targetPiece);
+                    render();
+                } else {
+                    // キャンセル
+                    selectedCell = null;
+                    validMoves = [];
+                    render();
+                }
+            }
+        }
+
+        // 持ち駒の選択
+        function selectHand(owner, type) {
+            if (currentTurn !== PLAYER || isGameOver) return;
+            selectedCell = { handOwner: owner, type: type };
+            validMoves = getDropMoves(type, owner);
+            render();
+        }
+
+        // 移動・駒打ちの実行
+        function executeMoveOrDrop(r, c) {
+            saveHistory();
+
+            if (selectedCell.handOwner) {
+                // 持ち駒を打つ
+                board[r][c] = { type: selectedCell.type, owner: selectedCell.handOwner };
+                hands[selectedCell.handOwner][selectedCell.type]--;
+                endTurn();
+            } else {
+                // 盤上の駒の移動
+                const fromR = selectedCell.r;
+                const fromC = selectedCell.c;
+                const piece = board[fromR][fromC];
+                const destPiece = board[r][c];
+
+                // 駒を取る
+                if (destPiece) {
+                    let baseType = destPiece.type;
+                    // 成り駒は元に戻して持ち駒へ
+                    if (['TO','NYO','NYU','NGIN'].includes(baseType)) baseType = 'FU';
+                    if (baseType === 'UMA') baseType = 'KAKU';
+                    if (baseType === 'RYU') baseType = 'HI';
+                    
+                    hands[piece.owner][baseType] = (hands[piece.owner][baseType] || 0) + 1;
+
+                    if (destPiece.type === 'OU') {
+                        isGameOver = true;
+                        document.getElementById('game-status').innerText = piece.owner === PLAYER ? "あなたの勝ち！" : "CPUの勝ち！";
+                    }
+                }
+
+                // 成り判定のチェック
+                const canPromote = (piece.owner === PLAYER && (r <= 2 || fromR <= 2)) || 
+                                   (piece.owner === CPU && (r >= 6 || fromR >= 6));
+                const promotable = ['FU', 'KYO', 'KEI', 'GIN', 'KAKU', 'HI'].includes(piece.type);
+
+                if (canPromote && promotable) {
+                    // 強制成りチェック（行き所のない駒）
+                    if ((piece.type === 'FU' || piece.type === 'KYO') && ((piece.owner === PLAYER && r === 0) || (piece.owner === CPU && r === 8))) {
+                        piece.type = getPromotedType(piece.type);
+                        movePiece(fromR, fromC, r, c, piece);
+                        endTurn();
+                    } else if (piece.type === 'KEI' && ((piece.owner === PLAYER && r <= 1) || (piece.owner === CPU && r >= 7))) {
+                        piece.type = getPromotedType(piece.type);
+                        movePiece(fromR, fromC, r, c, piece);
+                        endTurn();
+                    } else {
+                        // プレイヤーなら選択モーダル、CPUならAI判定
+                        if (piece.owner === PLAYER) {
+                            pendingPromotion = { fromR, fromC, toR: r, toC: c, piece };
+                            document.getElementById('promote-modal').style.display = 'flex';
+                        } else {
+                            // CPUは基本成る
+                            if(Math.random() > 0.1) piece.type = getPromotedType(piece.type);
+                            movePiece(fromR, fromC, r, c, piece);
+                            endTurn();
+                        }
+                    }
+                } else {
+                    movePiece(fromR, fromC, r, c, piece);
+                    endTurn();
+                }
+            }
+        }
+
+        function movePiece(fromR, fromC, toR, toC, piece) {
+            board[toR][toC] = piece;
+            board[fromR][fromC] = null;
+        }
+
+        function getPromotedType(type) {
+            if (type === 'FU') return 'TO';
+            if (type === 'KYO') return 'NYO';
+            if (type === 'KEI') return 'NYU';
+            if (type === 'GIN') return 'NGIN';
+            if (type === 'KAKU') return 'UMA';
+            if (type === 'HI') return 'RYU';
+            return type;
+        }
+
+        // 成り選択の回答処理
+        function handlePromoteChoice(promote) {
+            document.getElementById('promote-modal').style.display = 'none';
+            if (!pendingPromotion) return;
+
+            const { fromR, fromC, toR, toC, piece } = pendingPromotion;
+            if (promote) {
+                piece.type = getPromotedType(piece.type);
+            }
+            movePiece(fromR, fromC, toR, toC, piece);
+            pendingPromotion = null;
+            endTurn();
+        }
+
+        function endTurn() {
+            selectedCell = null;
+            validMoves = [];
+            if (!isGameOver) {
+                currentTurn = currentTurn === PLAYER ? CPU : PLAYER;
+                render();
+                if (currentTurn === CPU) {
+                    setTimeout(runCPULogic, 600); // 思考時間風の演出
+                }
+            } else {
+                render();
+            }
+        }
+
+        // --- 駒の動きロジック ---
+        function getValidMoves(r, c, piece) {
+            const moves = [];
+            const dir = piece.owner === PLAYER ? -1 : 1; // プレイヤーは上(-1)、CPUは下(+1)へ進む
+
+            // 各種駒の相対ベクトル定義
+            const step = (dr, dc) => {
+                const nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) {
+                    if (!board[nr][nc] || board[nr][nc].owner !== piece.owner) moves.push({ r: nr, c: nc });
+                }
+            };
+
+            const jump = (dr, dc) => {
+                let nr = r + dr, nc = c + dc;
+                while (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) {
+                    if (!board[nr][nc]) { moves.push({ r: nr, c: nc }); }
+                    else {
+                        if (board[nr][nc].owner !== piece.owner) moves.push({ r: nr, c: nc });
+                        break;
+                    }
+                    nr += dr; nc += dc;
+                }
+            };
+
+            switch(piece.type) {
+                case 'FU': step(dir, 0); break;
+                case 'KYO': jump(dir, 0); break;
+                case 'KEI': step(dir * 2, -1); step(dir * 2, 1); break;
+                case 'GIN':
+                    step(dir, 0); step(dir, -1); step(dir, 1);
+                    step(-dir, -1); step(-dir, 1);
+                    break;
+                case 'KIN':
+                case 'TO': case 'NYO': case 'NYU': case 'NGIN':
+                    step(dir, 0); step(dir, -1); step(dir, 1);
+                    step(0, -1); step(0, 1); step(-dir, 0);
+                    break;
+                case 'OU':
+                    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) if(dr!==0||dc!==0) step(dr, dc);
+                    break;
+                case 'KAKU':
+                    jump(1,1); jump(1,-1); jump(-1,1); jump(-1,-1);
+                    break;
+                case 'UMA':
+                    jump(1,1); jump(1,-1); jump(-1,1); jump(-1,-1);
+                    step(1,0); step(-1,0); step(0,1); step(0,-1);
+                    break;
+                case 'HI':
+                    jump(1,0); jump(-1,0); jump(0,1); jump(0,-1);
+                    break;
+                case 'RYU':
+                    jump(1,0); jump(-1,0); jump(0,1); jump(0,-1);
+                    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++) if(dr!==0||dc!==0) step(dr, dc);
+                    break;
+            }
+            return moves;
+        }
+
+        // 持ち駒を打てる場所の取得
+        function getDropMoves(type, owner) {
+            const moves = [];
+            const isPlayer = owner === PLAYER;
+            
+            // 二歩の簡易チェック用列挙
+            let pawnCols = [];
+            if (type === 'FU') {
+                for (let c = 0; c < 9; c++) {
+                    let hasPawn = false;
+                    for (let r = 0; r < 9; r++) {
+                        if (board[r][c] && board[r][c].type === 'FU' && board[r][c].owner === owner) {
+                            hasPawn = true; break;
+                        }
+                    }
+                    if (hasPawn) pawnCols.push(c);
+                }
+            }
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (board[r][c]) continue; // 既に駒がある
+
+                    // 行き所のない場所への配置制限
+                    if (type === 'FU' || type === 'KYO') {
+                        if (isPlayer && r === 0) continue;
+                        if (!isPlayer && r === 8) continue;
+                    }
+                    if (type === 'KEI') {
+                        if (isPlayer && r <= 1) continue;
+                        if (!isPlayer && r >= 7) continue;
+                    }
+                    // 二歩禁止
+                    if (type === 'FU' && pawnCols.includes(c)) continue;
+
+                    moves.push({ r, c });
+                }
+            }
+            return moves;
+        }
+
+        // --- 簡易CPU AIロジック ---
+        function runCPULogic() {
+            if (isGameOver) return;
+
+            let possibleMoves = [];
+
+            // 1. 盤上の駒の移動候補を全列挙
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (board[r][c] && board[r][c].owner === CPU) {
+                        const moves = getValidMoves(r, c, board[r][c]);
+                        moves.forEach(m => {
+                            let score = 0;
+                            const target = board[m.r][m.c];
+                            if (target) {
+                                score = getPieceValue(target.type) + 10; // 敵の駒を取る手を高評価
+                            }
+                            possibleMoves.push({ from: { r, c }, to: m, score: score, isDrop: false });
+                        });
+                    }
+                }
+            }
+
+            // 2. 持ち駒を打つ候補を列挙
+            for (const [type, count] of Object.entries(hands[CPU])) {
+                if (count > 0) {
+                    const drops = getDropMoves(type, CPU);
+                    drops.forEach(m => {
+                        // 打つ手は基本スコア1（歩で敵を詰める等は考慮せず簡易的に）
+                        possibleMoves.push({ to: m, type: type, score: 1, isDrop: true });
+                    });
+                }
+            }
+
+            if (possibleMoves.length === 0) {
+                isGameOver = true;
+                document.getElementById('game-status').innerText = "あなたの勝ち！（CPU詰み）";
+                render();
+                return;
+            }
+
+            // スコアが高い順にソート（ランダム性を持たせるため同点ならシャッフル）
+            possibleMoves.sort((a, b) => (b.score - a.score) || (Math.random() - 0.5));
+
+            // 最善手（一番スコアが高い手）を選択
+            const bestMove = possibleMoves[0];
+
+            if (bestMove.isDrop) {
+                board[bestMove.to.r][bestMove.to.c] = { type: bestMove.type, owner: CPU };
+                hands[CPU][bestMove.type]--;
+                endTurn();
+            } else {
+                selectedCell = bestMove.from;
+                executeMoveOrDrop(bestMove.to.r, bestMove.to.c);
+            }
+        }
+
+        // 簡易的な駒の重要度
+        function getPieceValue(type) {
+            switch(type) {
+                case 'OU': return 1000;
+                case 'HI': case 'RYU': return 90;
+                case 'KAKU': case 'UMA': return 80;
+                case 'KIN': case 'GIN': case 'NYO': case 'NYU': case 'NGIN': case 'TO': return 50;
+                case 'KEI': return 30;
+                case 'KYO': return 25;
+                case 'FU': return 10;
+                default: return 0;
+            }
+        }
+
+        // 開始
+        initGame();
+    </script>
+</body>
+</html>
