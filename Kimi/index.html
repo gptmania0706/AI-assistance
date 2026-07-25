@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カジュアル将棋</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
+    background: #faf8f5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+    color: #1a1a1a;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    letter-spacing: 0.05em;
+  }
+  .status-bar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .turn-badge {
+    padding: 5px 14px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1.5px solid #ddd;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .turn-badge.active {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  .alert {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 6px;
+  }
+  .check-alert { color: #c62828; background: #ffebee; }
+  .mate-alert { color: #c62828; background: #ffebee; font-size: 15px; }
+  .hidden { display: none !important; }
+
+  .komadai {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-height: 44px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1.5px solid #e0dcd5;
+    background: #f5f2ed;
+    max-width: 430px;
+    justify-content: center;
+    margin: 4px 0;
+  }
+  .komadai-label {
+    font-size: 11px;
+    color: #888;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 3px;
+    font-weight: 500;
+  }
+  .piece-in-hand {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 600;
+    border-radius: 7px;
+    border: 1.5px solid #d5d0c8;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.12s;
+    user-select: none;
+  }
+  .piece-in-hand:hover { background: #f0ede8; transform: translateY(-1px); }
+  .piece-in-hand.selected { border-color: #1a1a1a; box-shadow: 0 0 0 2px #1a1a1a; }
+  .piece-in-hand.gote { color: #c62828; transform: rotate(180deg); }
+  .piece-in-hand.sente { color: #1a1a1a; }
+
+  .board-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 6px 0;
+  }
+  .coords {
+    display: grid;
+    grid-template-columns: repeat(9, 42px);
+    font-size: 11px;
+    color: #999;
+    text-align: center;
+    font-weight: 500;
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(9, 42px);
+    grid-template-rows: repeat(9, 42px);
+    gap: 0;
+    border: 2.5px solid #3e3226;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #3e3226;
+  }
+  .cell {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    position: relative;
+    border: 0.5px solid rgba(100,80,60,0.15);
+    transition: background 0.1s;
+    user-select: none;
+  }
+  .cell:nth-child(odd) { background: #f0d9b5; }
+  .cell:nth-child(even) { background: #e8cfa8; }
+  .cell.highlight { background: #a5d6a7 !important; }
+  .cell.capture-hl { background: #ef9a9a !important; }
+  .cell.selected { box-shadow: inset 0 0 0 3px #3e3226; }
+  .cell.last-move { box-shadow: inset 0 0 0 2.5px #1976d2; }
+  .piece {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+  .piece.gote { color: #c62828; transform: rotate(180deg); }
+  .piece.sente { color: #1a1a1a; }
+  .piece.promoted { font-size: 17px; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .btn {
+    padding: 9px 20px;
+    border-radius: 10px;
+    border: 1.5px solid #d5d0c8;
+    background: #fff;
+    color: #1a1a1a;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .btn:hover { background: #f5f2ed; transform: translateY(-1px); }
+  .btn.primary {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  .btn.primary:hover { opacity: 0.88; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: #fff;
+    border-radius: 14px;
+    padding: 24px 28px;
+    min-width: 240px;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+  }
+  .modal h3 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
+  .modal-btns { display: flex; gap: 12px; justify-content: center; margin-top: 18px; }
+
+  @media (max-width: 420px) {
+    .board { grid-template-columns: repeat(9, 36px); grid-template-rows: repeat(9, 36px); }
+    .cell { width: 36px; height: 36px; font-size: 17px; }
+    .coords { grid-template-columns: repeat(9, 36px); }
+    .piece-in-hand { width: 34px; height: 34px; font-size: 16px; }
+  }
+</style>
+<base target="_blank">
+</head>
+<body>
+<h1>カジュアル将棋</h1>
+
+<div class="status-bar">
+  <div class="turn-badge active" id="turnBadge">先手の番</div>
+  <div id="checkMsg" class="alert check-alert hidden">王手！</div>
+  <div id="mateMsg" class="alert mate-alert hidden">詰み！</div>
+</div>
+
+<div class="komadai" id="goteKomadai">
+  <div class="komadai-label">後手の持ち駒</div>
+</div>
+
+<div class="board-wrap">
+  <div class="coords" id="topCoords"></div>
+  <div class="board" id="board"></div>
+  <div class="coords" id="bottomCoords"></div>
+</div>
+
+<div class="komadai" id="senteKomadai">
+  <div class="komadai-label">先手の持ち駒</div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="btnMatta" onclick="app.matta()">待った</button>
+  <button class="btn primary" onclick="app.reset()">新規対局</button>
+</div>
+
+<div class="modal-overlay hidden" id="promoteModal">
+  <div class="modal">
+    <h3>成りますか？</h3>
+    <div class="modal-btns">
+      <button class="btn primary" onclick="app.confirmPromote(true)">成る</button>
+      <button class="btn" onclick="app.confirmPromote(false)">不成</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const PIECE_NAMES = {
+    fu:'歩', kyo:'香', kei:'桂', gin:'銀', kin:'金', kaku:'角', hi:'飛', ou:'玉',
+    to:'と', nkyo:'杏', nkei:'圭', ngin:'全', uma:'馬', ryu:'竜'
+  };
+  const PROMOTED = { fu:'to', kyo:'nkyo', kei:'nkei', gin:'ngin', kaku:'uma', hi:'ryu' };
+  const UNPROMOTED = { to:'fu', nkyo:'kyo', nkei:'kei', ngin:'gin', uma:'kaku', ryu:'hi' };
+  const CAN_PROMOTE = ['fu','kyo','kei','gin','kaku','hi'];
+
+  function createBoard() {
+    const b = [];
+    for (let r=0;r<9;r++) { b.push(new Array(9).fill(null)); }
+    return b;
+  }
+
+  function initialBoard() {
+    const b = createBoard();
+    const back = ['kyo','kei','gin','kin','ou','kin','gin','kei','kyo'];
+    for (let c=0;c<9;c++) {
+      b[0][c] = { type: back[c], owner: 1 };
+      b[8][c] = { type: back[c], owner: 0 };
+    }
+    b[1][1] = { type:'kaku', owner:1 };
+    b[1][7] = { type:'hi', owner:1 };
+    b[7][1] = { type:'hi', owner:0 };
+    b[7][7] = { type:'kaku', owner:0 };
+    for (let c=0;c<9;c++) {
+      b[2][c] = { type:'fu', owner:1 };
+      b[6][c] = { type:'fu', owner:0 };
+    }
+    return b;
+  }
+
+  function cloneBoard(b) {
+    return b.map(row => row.map(p => p ? { type: p.type, owner: p.owner } : null));
+  }
+
+  function inBounds(r,c) { return r>=0 && r<9 && c>=0 && c<9; }
+
+  function isPromoted(type) { return ['to','nkyo','nkei','ngin','uma','ryu'].includes(type); }
+
+  function getBaseType(type) {
+    return UNPROMOTED[type] || type;
+  }
+
+  function moveVectors(type, owner) {
+    const d = owner === 0 ? -1 : 1;
+    switch(type) {
+      case 'fu': return [[d,0]];
+      case 'kyo': return [[d,0]];
+      case 'kei': return [[2*d,-1],[2*d,1]];
+      case 'gin': return [[d,0],[d,-1],[d,1],[-d,-1],[-d,1]];
+      case 'kin': case 'to': case 'nkyo': case 'nkei': case 'ngin':
+        return [[d,0],[d,-1],[d,1],[0,-1],[0,1],[-d,0]];
+      case 'kaku': return [];
+      case 'uma': return [[1,0],[-1,0],[0,1],[0,-1]];
+      case 'hi': return [];
+      case 'ryu': return [[1,1],[1,-1],[-1,1],[-1,-1]];
+      case 'ou': return [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+      default: return [];
+    }
+  }
+
+  function isSlide(type) {
+    return ['kyo','kaku','hi','uma','ryu'].includes(type);
+  }
+
+  function getSlideDirs(type) {
+    if (type==='kyo') return [[1,0]];
+    if (type==='kaku' || type==='uma') return [[1,1],[1,-1],[-1,1],[-1,-1]];
+    if (type==='hi' || type==='ryu') return [[1,0],[-1,0],[0,1],[0,-1]];
+    return [];
+  }
+
+  function findKing(board, owner) {
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      const p = board[r][c];
+      if (p && p.owner===owner && (p.type==='ou' || p.type==='gyoku')) return [r,c];
+    }
+    return null;
+  }
+
+  function canMoveTo(board, fromR, fromC, toR, toC, owner) {
+    if (!inBounds(toR,toC)) return false;
+    const target = board[toR][toC];
+    if (target && target.owner === owner) return false;
+    const p = board[fromR][fromC];
+    if (!p) return false;
+    const vecs = moveVectors(p.type, p.owner);
+    for (const [vr,vc] of vecs) {
+      if (fromR+vr===toR && fromC+vc===toC) return true;
+    }
+    if (isSlide(p.type)) {
+      const dirs = getSlideDirs(p.type);
+      for (const [dr,dc] of dirs) {
+        let r=fromR+dr, c=fromC+dc;
+        while (inBounds(r,c)) {
+          if (r===toR && c===toC) return true;
+          if (board[r][c]) break;
+          r+=dr; c+=dc;
+        }
+      }
+    }
+    return false;
+  }
+
+  function getLegalMoves(board, r, c, handMode, handType, handOwner) {
+    const moves = [];
+    if (handMode) {
+      if (!handType) return moves;
+      for (let rr=0;rr<9;rr++) for (let cc=0;cc<9;cc++) {
+        if (board[rr][cc]) continue;
+        if (handType==='fu' || handType==='kyo') {
+          if (handOwner===0 && rr===0) continue;
+          if (handOwner===1 && rr===8) continue;
+        }
+        if (handType==='kei') {
+          if (handOwner===0 && rr<=1) continue;
+          if (handOwner===1 && rr>=7) continue;
+        }
+        if (handType==='fu') {
+          let hasFu = false;
+          for (let i=0;i<9;i++) {
+            const p = board[rr][i];
+            if (p && p.owner===handOwner && p.type==='fu') { hasFu=true; break; }
+          }
+          if (hasFu) continue;
+        }
+        moves.push([rr,cc]);
+      }
+      return moves;
+    }
+    const p = board[r][c];
+    if (!p) return moves;
+    const vecs = moveVectors(p.type, p.owner);
+    for (const [vr,vc] of vecs) {
+      const nr=r+vr, nc=c+vc;
+      if (inBounds(nr,nc) && (!board[nr][nc] || board[nr][nc].owner!==p.owner)) moves.push([nr,nc]);
+    }
+    if (isSlide(p.type)) {
+      const dirs = getSlideDirs(p.type);
+      for (const [dr,dc] of dirs) {
+        let nr=r+dr, nc=c+dc;
+        while (inBounds(nr,nc)) {
+          if (!board[nr][nc]) { moves.push([nr,nc]); }
+          else { if (board[nr][nc].owner!==p.owner) moves.push([nr,nc]); break; }
+          nr+=dr; nc+=dc;
+        }
+      }
+    }
+    return moves;
+  }
+
+  function isInCheck(board, owner) {
+    const king = findKing(board, owner);
+    if (!king) return false;
+    const [kr,kc] = king;
+    const opp = 1-owner;
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      const p = board[r][c];
+      if (p && p.owner===opp) {
+        if (canMoveTo(board, r, c, kr, kc, opp)) return true;
+      }
+    }
+    return false;
+  }
+
+  function isCheckmate(board, owner) {
+    if (!isInCheck(board, owner)) return false;
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      const p = board[r][c];
+      if (!p || p.owner!==owner) continue;
+      const moves = getLegalMoves(board, r, c, false);
+      for (const [nr,nc] of moves) {
+        const nb = cloneBoard(board);
+        const captured = nb[nr][nc];
+        nb[nr][nc] = { type: p.type, owner: p.owner };
+        nb[r][c] = null;
+        if (!isInCheck(nb, owner)) return false;
+      }
+    }
+    const hand = owner===0 ? appState.senteHand : appState.goteHand;
+    for (const t of hand) {
+      for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+        if (board[r][c]) continue;
+        if (t==='fu' || t==='kyo') { if (owner===0 && r===0) continue; if (owner===1 && r===8) continue; }
+        if (t==='kei') { if (owner===0 && r<=1) continue; if (owner===1 && r>=7) continue; }
+        if (t==='fu') {
+          let hasFu=false;
+          for (let i=0;i<9;i++) if (board[r][i] && board[r][i].owner===owner && board[r][i].type==='fu') hasFu=true;
+          if (hasFu) continue;
+        }
+        const nb = cloneBoard(board);
+        nb[r][c] = { type: t, owner };
+        if (!isInCheck(nb, owner)) return false;
+      }
+    }
+    return true;
+  }
+
+  function canPromote(type, fromR, toR, owner) {
+    if (!CAN_PROMOTE.includes(type)) return false;
+    if (owner===0) return fromR<=2 || toR<=2;
+    return fromR>=6 || toR>=6;
+  }
+
+  function mustPromote(type, toR, owner) {
+    if (type==='fu' || type==='kyo') {
+      if (owner===0 && toR===0) return true;
+      if (owner===1 && toR===8) return true;
+    }
+    if (type==='kei') {
+      if (owner===0 && toR<=1) return true;
+      if (owner===1 && toR>=7) return true;
+    }
+    return false;
+  }
+
+  let appState = {
+    board: initialBoard(),
+    senteHand: [],
+    goteHand: [],
+    turn: 0,
+    selected: null,
+    handSelected: null,
+    history: [],
+    gameOver: false,
+    lastMove: null,
+    promoting: null
+  };
+
+  function saveHistory() {
+    appState.history.push({
+      board: cloneBoard(appState.board),
+      senteHand: [...appState.senteHand],
+      goteHand: [...appState.goteHand],
+      turn: appState.turn,
+      lastMove: appState.lastMove ? [...appState.lastMove] : null
+    });
+    if (appState.history.length > 30) appState.history.shift();
+  }
+
+  function renderBoard() {
+    const boardEl = document.getElementById('board');
+    boardEl.innerHTML = '';
+    for (let r=0;r<9;r++) {
+      for (let c=0;c<9;c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.r = r; cell.dataset.c = c;
+        const p = appState.board[r][c];
+        if (p) {
+          const span = document.createElement('span');
+          span.className = 'piece ' + (p.owner===0?'sente':'gote');
+          if (isPromoted(p.type)) span.classList.add('promoted');
+          span.textContent = PIECE_NAMES[p.type] || p.type;
+          cell.appendChild(span);
+        }
+        if (appState.selected && appState.selected[0]===r && appState.selected[1]===c) cell.classList.add('selected');
+        if (appState.lastMove && appState.lastMove[0]===r && appState.lastMove[1]===c) cell.classList.add('last-move');
+        cell.onclick = () => onCellClick(r,c);
+        boardEl.appendChild(cell);
+      }
+    }
+    highlightMoves();
+  }
+
+  function highlightMoves() {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => {
+      cell.classList.remove('highlight','capture-hl');
+    });
+    if (appState.gameOver) return;
+    let moves = [];
+    if (appState.handSelected) {
+      moves = getLegalMoves(appState.board, 0, 0, true, appState.handSelected.type, appState.handSelected.owner);
+    } else if (appState.selected) {
+      moves = getLegalMoves(appState.board, appState.selected[0], appState.selected[1], false);
+    }
+    moves.forEach(([r,c]) => {
+      const idx = r*9+c;
+      const cell = cells[idx];
+      if (cell) {
+        if (appState.board[r][c] && appState.board[r][c].owner !== appState.turn) cell.classList.add('capture-hl');
+        else cell.classList.add('highlight');
+      }
+    });
+  }
+
+  function renderHands() {
+    const senteEl = document.getElementById('senteKomadai');
+    const goteEl = document.getElementById('goteKomadai');
+    senteEl.innerHTML = '<div class="komadai-label">先手の持ち駒</div>';
+    goteEl.innerHTML = '<div class="komadai-label">後手の持ち駒</div>';
+    const counts = {};
+    appState.senteHand.forEach(t => { counts['s_'+t] = (counts['s_'+t]||0)+1; });
+    appState.goteHand.forEach(t => { counts['g_'+t] = (counts['g_'+t]||0)+1; });
+    const order = ['hi','kaku','kin','gin','kei','kyo','fu'];
+    order.forEach(t => {
+      const sc = counts['s_'+t]||0;
+      if (sc>0) {
+        const div = document.createElement('div');
+        div.className = 'piece-in-hand sente' + (appState.handSelected && appState.handSelected.type===t && appState.handSelected.owner===0 ? ' selected' : '');
+        div.textContent = PIECE_NAMES[t] + (sc>1?sc:'');
+        div.onclick = () => onHandClick(t, 0);
+        senteEl.appendChild(div);
+      }
+      const gc = counts['g_'+t]||0;
+      if (gc>0) {
+        const div = document.createElement('div');
+        div.className = 'piece-in-hand gote' + (appState.handSelected && appState.handSelected.type===t && appState.handSelected.owner===1 ? ' selected' : '');
+        div.textContent = PIECE_NAMES[t] + (gc>1?gc:'');
+        div.onclick = () => onHandClick(t, 1);
+        goteEl.appendChild(div);
+      }
+    });
+  }
+
+  function updateStatus() {
+    const badge = document.getElementById('turnBadge');
+    const check = document.getElementById('checkMsg');
+    const mate = document.getElementById('mateMsg');
+    if (appState.gameOver) {
+      badge.textContent = appState.turn===0 ? '後手の勝ち' : '先手の勝ち';
+      badge.classList.add('active');
+    } else {
+      badge.textContent = appState.turn===0 ? '先手の番' : '後手の番';
+      badge.classList.add('active');
+    }
+    const inCheck = !appState.gameOver && isInCheck(appState.board, appState.turn);
+    check.classList.toggle('hidden', !inCheck);
+    mate.classList.toggle('hidden', !appState.gameOver);
+    document.getElementById('btnMatta').disabled = appState.history.length===0 || appState.gameOver;
+  }
+
+  function onHandClick(type, owner) {
+    if (appState.gameOver) return;
+    if (appState.turn !== owner) return;
+    if (appState.handSelected && appState.handSelected.type===type && appState.handSelected.owner===owner) {
+      appState.handSelected = null;
+    } else {
+      appState.handSelected = { type, owner };
+      appState.selected = null;
+    }
+    renderHands();
+    renderBoard();
+  }
+
+  function onCellClick(r,c) {
+    if (appState.gameOver) return;
+    if (appState.promoting) return;
+    if (appState.turn !== 0) return;
+
+    if (appState.handSelected) {
+      const moves = getLegalMoves(appState.board, 0, 0, true, appState.handSelected.type, appState.handSelected.owner);
+      if (moves.some(([rr,cc])=>rr===r&&cc===c)) {
+        saveHistory();
+        appState.board[r][c] = { type: appState.handSelected.type, owner: appState.handSelected.owner };
+        const hand = appState.handSelected.owner===0 ? appState.senteHand : appState.goteHand;
+        const idx = hand.indexOf(appState.handSelected.type);
+        if (idx>=0) hand.splice(idx,1);
+        appState.handSelected = null;
+        appState.lastMove = [r,c];
+        endTurn();
+      } else {
+        appState.handSelected = null;
+        renderHands();
+        renderBoard();
+      }
+      return;
+    }
+
+    const p = appState.board[r][c];
+    if (appState.selected) {
+      const [sr,sc] = appState.selected;
+      const sp = appState.board[sr][sc];
+      const moves = getLegalMoves(appState.board, sr, sc, false);
+      if (moves.some(([rr,cc])=>rr===r&&cc===c)) {
+        saveHistory();
+        const captured = appState.board[r][c];
+        if (captured) {
+          const hand = sp.owner===0 ? appState.senteHand : appState.goteHand;
+          hand.push(getBaseType(captured.type));
+        }
+        const willPromote = canPromote(sp.type, sr, r, sp.owner);
+        const must = mustPromote(sp.type, r, sp.owner);
+        if (willPromote && !must) {
+          appState.promoting = { sr, sc, r, c, type: sp.type, owner: sp.owner };
+          document.getElementById('promoteModal').classList.remove('hidden');
+          return;
+        }
+        const newType = (willPromote && must) ? PROMOTED[sp.type] : sp.type;
+        appState.board[r][c] = { type: newType, owner: sp.owner };
+        appState.board[sr][sc] = null;
+        appState.selected = null;
+        appState.lastMove = [r,c];
+        endTurn();
+        return;
+      }
+    }
+
+    if (p && p.owner === appState.turn) {
+      appState.selected = [r,c];
+      appState.handSelected = null;
+    } else {
+      appState.selected = null;
+    }
+    renderHands();
+    renderBoard();
+  }
+
+  function confirmPromote(doPromote) {
+    const { sr, sc, r, c, type, owner } = appState.promoting;
+    const newType = doPromote ? PROMOTED[type] : type;
+    appState.board[r][c] = { type: newType, owner };
+    appState.board[sr][sc] = null;
+    appState.promoting = null;
+    appState.selected = null;
+    appState.lastMove = [r,c];
+    document.getElementById('promoteModal').classList.add('hidden');
+    endTurn();
+  }
+
+  function endTurn() {
+    appState.turn = 1 - appState.turn;
+    if (isInCheck(appState.board, appState.turn)) {
+      if (isCheckmate(appState.board, appState.turn)) {
+        appState.gameOver = true;
+      }
+    }
+    renderBoard();
+    renderHands();
+    updateStatus();
+    if (!appState.gameOver && appState.turn === 1) {
+      setTimeout(cpuTurn, 450);
+    }
+  }
+
+  function cpuTurn() {
+    if (appState.gameOver) return;
+    const owner = 1;
+    const candidates = [];
+    const board = appState.board;
+
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      const p = board[r][c];
+      if (!p || p.owner!==owner) continue;
+      const moves = getLegalMoves(board, r, c, false);
+      for (const [nr,nc] of moves) {
+        const nb = cloneBoard(board);
+        const captured = nb[nr][nc];
+        let newType = p.type;
+        if (canPromote(p.type, r, nr, owner)) {
+          if (mustPromote(p.type, nr, owner)) newType = PROMOTED[p.type];
+          else if (Math.random()<0.7) newType = PROMOTED[p.type];
+        }
+        nb[nr][nc] = { type: newType, owner };
+        nb[r][c] = null;
+        if (isInCheck(nb, owner)) continue;
+        const givesCheck = isInCheck(nb, 0);
+        candidates.push({ from:[r,c], to:[nr,nc], capture: captured, givesCheck, isDrop:false, type:p.type, newType });
+      }
+    }
+
+    const hand = appState.goteHand;
+    const uniq = [...new Set(hand)];
+    for (const t of uniq) {
+      for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+        if (board[r][c]) continue;
+        if (t==='fu' || t==='kyo') { if (owner===0 && r===0) continue; if (owner===1 && r===8) continue; }
+        if (t==='kei') { if (owner===0 && r<=1) continue; if (owner===1 && r>=7) continue; }
+        if (t==='fu') {
+          let hasFu=false;
+          for (let i=0;i<9;i++) if (board[r][i] && board[r][i].owner===owner && board[r][i].type==='fu') hasFu=true;
+          if (hasFu) continue;
+        }
+        const nb = cloneBoard(board);
+        nb[r][c] = { type:t, owner };
+        if (isInCheck(nb, owner)) continue;
+        const givesCheck = isInCheck(nb, 0);
+        candidates.push({ from:null, to:[r,c], capture:null, givesCheck, isDrop:true, type:t });
+      }
+    }
+
+    if (candidates.length===0) {
+      appState.gameOver = true;
+      updateStatus();
+      return;
+    }
+
+    let bestScore = -9999;
+    const scored = candidates.map(m => {
+      let s = Math.random() * 20;
+      if (m.capture) {
+        const capVal = { fu:1, kyo:3, kei:4, gin:5, kin:6, kaku:8, hi:9, ou:100 }[getBaseType(m.capture.type)] || 1;
+        s += capVal * 15;
+      }
+      if (m.givesCheck) s += 25;
+      if (m.newType && m.newType!==m.type) s += 5;
+      if (m.isDrop && m.type==='kin') s += 3;
+      if (m.isDrop && m.type==='fu') s += 1;
+      return { ...m, score: s };
+    });
+    scored.forEach(m => { if (m.score > bestScore) bestScore = m.score; });
+    const top = scored.filter(m => m.score >= bestScore - 10);
+    const move = top[Math.floor(Math.random()*top.length)];
+
+    saveHistory();
+    if (move.isDrop) {
+      board[move.to[0]][move.to[1]] = { type: move.type, owner };
+      const idx = appState.goteHand.indexOf(move.type);
+      if (idx>=0) appState.goteHand.splice(idx,1);
+    } else {
+      const captured = board[move.to[0]][move.to[1]];
+      if (captured) appState.goteHand.push(getBaseType(captured.type));
+      board[move.to[0]][move.to[1]] = { type: move.newType, owner };
+      board[move.from[0]][move.from[1]] = null;
+    }
+    appState.lastMove = move.to;
+    appState.turn = 0;
+    if (isInCheck(appState.board, 0)) {
+      if (isCheckmate(appState.board, 0)) appState.gameOver = true;
+    }
+    renderBoard();
+    renderHands();
+    updateStatus();
+  }
+
+  function reset() {
+    appState = {
+      board: initialBoard(),
+      senteHand: [],
+      goteHand: [],
+      turn: 0,
+      selected: null,
+      handSelected: null,
+      history: [],
+      gameOver: false,
+      lastMove: null,
+      promoting: null
+    };
+    document.getElementById('promoteModal').classList.add('hidden');
+    renderBoard();
+    renderHands();
+    updateStatus();
+  }
+
+  function matta() {
+    if (appState.history.length===0 || appState.gameOver) return;
+    const h = appState.history.pop();
+    appState.board = h.board;
+    appState.senteHand = h.senteHand;
+    appState.goteHand = h.goteHand;
+    appState.turn = h.turn;
+    appState.lastMove = h.lastMove;
+    appState.selected = null;
+    appState.handSelected = null;
+    appState.gameOver = false;
+    appState.promoting = null;
+    document.getElementById('promoteModal').classList.add('hidden');
+    renderBoard();
+    renderHands();
+    updateStatus();
+  }
+
+  window.app = { confirmPromote, reset, matta };
+
+  const topCoords = document.getElementById('topCoords');
+  const bottomCoords = document.getElementById('bottomCoords');
+  const files = ['9','8','7','6','5','4','3','2','1'];
+  files.forEach(n => {
+    const d1 = document.createElement('div'); d1.textContent = n; topCoords.appendChild(d1);
+    const d2 = document.createElement('div'); d2.textContent = n; bottomCoords.appendChild(d2);
+  });
+
+  renderBoard();
+  renderHands();
+  updateStatus();
+})();
+</script>
+</body>
+</html>
